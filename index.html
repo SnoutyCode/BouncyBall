@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Simulation multi-balles avec gradient</title>
+    <style>
+      body {
+        margin: 0;
+        background: #111;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        overflow: hidden;
+      }
+      canvas {
+        background: radial-gradient(circle at center, #222 0%, #000 100%);
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="canvas" width="800" height="800"></canvas>
+
+    <script>
+      const canvas = document.getElementById("canvas");
+      const ctx = canvas.getContext("2d");
+
+      const centerX = canvas.width / 2;
+      const centerY = canvas.height / 2;
+      const circleRadius = 250;
+
+      const gravity = 0.12;
+      const friction = 1;
+      const bounceLoss = 1;
+
+      const delay = 80;
+      const maxBalls = 10;
+      const nb_max_de_rbnd = 200;
+      const initialSpeed = 7;
+      const directionAngle = 2.1;
+
+      const balls = [];
+
+      // SFX
+      const bounceSound = new Audio("bounce.mp3");
+      bounceSound.preload = "auto";
+      bounceSound.volume = 0.3;
+
+      // Gradient de couleurs en RGB
+      const gradientColors = [
+        [0, 255, 0], // vert
+        [255, 255, 0], // jaune
+        [255, 165, 0], // orange
+        [255, 0, 0], // rouge
+        [255, 0, 255], //rose
+        [148, 0, 211], //violet
+        [0, 0, 255], //bleu
+        [0, 120, 255], //cyan
+        [0, 255, 0], // vert
+        [255, 255, 0], // jaune
+        [255, 165, 0], // orange
+        [255, 0, 0], // rouge
+        [255, 0, 255], //rose
+        [148, 0, 211], //violet
+        [0, 0, 255], //bleu
+        [0, 120, 255], //cyan
+        [0, 255, 0], // vert
+        [255, 255, 0], // jaune
+        [255, 165, 0], // orange
+        [255, 0, 0], // rouge
+        [255, 0, 255], //rose
+        [148, 0, 211], //violet
+        [0, 0, 255], //bleu
+        [0, 120, 255], //cyan
+      ];
+
+      function lerpColorRGB(a, b, t) {
+        return [
+          Math.round(a[0] + (b[0] - a[0]) * t),
+          Math.round(a[1] + (b[1] - a[1]) * t),
+          Math.round(a[2] + (b[2] - a[2]) * t),
+        ];
+      }
+
+      function createBall() {
+        return {
+          x: centerX,
+          y: centerY,
+          radius: 14,
+          vx: Math.cos(directionAngle) * initialSpeed,
+          vy: Math.sin(directionAngle) * initialSpeed,
+          trail: [],
+          bounces: 0,
+          colorIndex: 0,
+          colorProgress: 0,
+          color: [...gradientColors[0]],
+        };
+      }
+
+      setInterval(() => {
+        if (balls.length < maxBalls) balls.push(createBall());
+      }, delay);
+
+      function update() {
+        balls.forEach((ball) => {
+          ball.vy += gravity;
+          ball.x += ball.vx;
+          ball.y += ball.vy;
+          ball.vx *= friction;
+          ball.vy *= friction;
+
+          const dx = ball.x - centerX;
+          const dy = ball.y - centerY;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+
+          if (distance + ball.radius > circleRadius) {
+            ball.bounces++;
+            const nx = dx / distance;
+            const ny = dy / distance;
+            const dot = ball.vx * nx + ball.vy * ny;
+
+            ball.vx -= 2 * dot * nx;
+            ball.vy -= 2 * dot * ny;
+            ball.vx *= bounceLoss;
+            ball.vy *= bounceLoss;
+
+            ball.x = centerX + nx * (circleRadius - ball.radius);
+            ball.y = centerY + ny * (circleRadius - ball.radius);
+
+            const soundClone = bounceSound.cloneNode();
+            soundClone.play();
+
+            // Changement progressif de couleur
+            ball.colorProgress += 0.2;
+            if (ball.colorProgress >= 1) {
+              ball.colorProgress = 0;
+              ball.colorIndex++;
+              if (ball.colorIndex >= gradientColors.length - 1) {
+                ball.colorIndex = gradientColors.length - 2;
+              }
+            }
+            ball.color = lerpColorRGB(
+              gradientColors[ball.colorIndex],
+              gradientColors[ball.colorIndex + 1],
+              ball.colorProgress,
+            );
+
+            if (ball.bounces >= nb_max_de_rbnd) {
+              balls.splice(balls.indexOf(ball), 1);
+            }
+          }
+
+          // Traînée
+          ball.trail.push({ x: ball.x, y: ball.y, color: [...ball.color] });
+          if (ball.trail.length > 15) ball.trail.shift();
+        });
+      }
+
+      function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Cercle central
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, circleRadius, 0, Math.PI * 2);
+        ctx.strokeStyle = "white";
+        ctx.lineWidth = 3;
+        ctx.stroke();
+
+        balls.forEach((ball) => {
+          // Traînée
+          ball.trail.forEach((pos, i) => {
+            const alpha = (i / ball.trail.length) * 0.4;
+            ctx.fillStyle = `rgb(${ball.color[0]},${ball.color[1]},${ball.color[2]})`;
+            ctx.beginPath();
+            ctx.arc(pos.x, pos.y, ball.radius * (alpha * 1.2), 0, Math.PI * 2);
+            ctx.fill();
+          });
+
+          // Balle
+          ctx.fillStyle = `rgb(${ball.color[0]},${ball.color[1]},${ball.color[2]})`;
+          ctx.beginPath();
+          ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+          ctx.fill();
+        });
+      }
+
+      function animate() {
+        update();
+        draw();
+        requestAnimationFrame(animate);
+      }
+
+      animate();
+    </script>
+  </body>
+</html>
